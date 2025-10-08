@@ -2,111 +2,100 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>تطبيق دردشة يا محمد</title>
+    <title>تطبيق دردشة متطور يا محمد</title>
     <style>
-        body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; background: #f4f4f4; }
-        h1 { background: #333; color: white; margin: 0; padding: 10px; font-size: 1.5em; }
-        #messages { list-style-type: none; margin: 0; padding: 0; }
-        #messages li { padding: 0.5rem 1rem; border-bottom: 1px solid #eee; }
-        #messages li:nth-child(odd) { background: #fff; }
-        #messages li strong { color: #007bff; } /* لون أزرق للمرسل/المستقبل */
+        /* ستايل أساسي لإخفاء شاشة الدردشة حتى يتم إدخال الاسم */
+        body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; }
+        #chat-container { display: none; }
+        #name-form { text-align: center; padding: 50px; background: #f4f4f4; border-bottom: 1px solid #ddd; }
+        #name-form input { padding: 10px; width: 60%; margin-right: 10px; border: 1px solid #ccc; border-radius: 4px; }
+        #name-form button { padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
         
-        form {
-            background: #fff;
-            padding: 0.25rem;
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            display: flex;
-            height: 3rem;
-            box-sizing: border-box;
-            border-top: 1px solid #ccc;
-        }
-        form input {
-            border: 1px solid #ccc;
-            padding: 0 1rem;
-            flex-grow: 1;
-            border-radius: 4px;
-            margin: 0.25rem;
-        }
-        form button {
-            background: #28a745; /* لون أخضر جميل */
-            border: none;
-            padding: 0 1rem;
-            margin: 0.25rem;
-            border-radius: 4px;
-            outline: none;
-            color: white;
-            cursor: pointer;
-        }
-        #recipient_id {
-            flex-grow: 0;
-            width: 120px;
-            background: #e9ecef; /* لون مميز لحقل الـ ID */
-        }
+        #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
+        #form input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
+        #form button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; cursor: pointer; }
+        
+        #messages { list-style-type: none; margin: 0; padding: 0; }
+        #messages li { padding: 0.5rem 1rem; }
+        #messages li:nth-child(odd) { background: #eee; }
+        #messages li strong { font-weight: bold; color: #007bff; }
     </style>
 </head>
 <body>
-    <h1>تطبيق الدردشة | ID الخاص بك: جاري التحميل...</h1>
-    
-    <ul id="messages"></ul>
 
-    <form action="">
-        <input id="recipient_id" autocomplete="off" placeholder="ID المستلم" required /> 
-        <input id="m" autocomplete="off" placeholder="اكتب رسالتك..." required />
-        <button>إرسال</button>
-    </form>
+    <div id="name-container">
+        <form id="name-form">
+            <h2>أدخل اسمك يا مطور</h2>
+            <input id="nickname" autocomplete="off" placeholder="اسمك" required />
+            <button>دخول للدردشة</button>
+        </form>
+    </div>
+
+    <div id="chat-container">
+        <h1>تطبيق الدردشة يا محمد</h1>
+        <ul id="messages"></ul>
+        <form id="form">
+            <input id="room" autocomplete="off" placeholder="اسم الغرفة / ID خاص" style="width: 25%; margin-right: 5px;" />
+            <input id="m" autocomplete="off" placeholder="اكتب رسالتك..." style="width: 50%;" />
+            <button>إرسال</button>
+        </form>
+    </div>
 
     <script src="/socket.io/socket.io.js"></script>
-    
     <script>
-      var socket = io();
-      var form = document.querySelector('form');
-      var input = document.getElementById('m');
-      var recipientInput = document.getElementById('recipient_id');
-      var messages = document.getElementById('messages');
-      var myID = ''; // سنحفظ فيه الـ ID الخاص بنا
+        // المتغيرات
+        var socket = io();
+        var nickname = '';
+        var chatContainer = document.getElementById('chat-container');
+        var nameContainer = document.getElementById('name-container');
+        var nameForm = document.getElementById('name-form');
+        var form = document.getElementById('form');
+        var input = document.getElementById('m');
+        var roomInput = document.getElementById('room'); // الحقل الجديد
+        var messages = document.getElementById('messages');
 
-      // 1. استقبال الـ ID الخاص بنا وعرضه
-      socket.on('my_id', function(id) {
-          myID = id;
-          document.querySelector('h1').innerHTML = 'تطبيق الدردشة | ID الخاص بك: <strong>' + myID + '</strong>';
-      });
-      
-      // 2. معالجة إرسال الرسالة الخاصة
-      form.addEventListener('submit', function(e) {
-          e.preventDefault();
-          var recipient = recipientInput.value.trim();
-          var msg = input.value.trim();
+        // التعامل مع إرسال الاسم
+        nameForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            nickname = document.getElementById('nickname').value;
+            if (nickname) {
+                socket.emit('new user', nickname); 
+                nameContainer.style.display = 'none';
+                chatContainer.style.display = 'block';
+            }
+        });
 
-          if (msg && recipient) {
-              // نرسل الرسالة و ID المستلم
-              socket.emit('private_message', { recipient: recipient, message: msg });
-              
-              // مسح حقل الرسالة
-              input.value = '';
-          } else if (msg && !recipient) {
-              alert('يجب إدخال ID المستلم أولاً!');
-          }
-      });
+        // التعامل مع إرسال الرسالة
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var room = roomInput.value.trim(); // قراءة اسم الغرفة/المستلم
+            if (input.value) {
+                // إرسال الرسالة، الاسم، والغرفة/المستلم معاً
+                socket.emit('chat message', { 
+                    msg: input.value, 
+                    user: nickname,
+                    room: room 
+                });
+                input.value = '';
+            }
+        });
 
-      // 3. عرض الرسائل المستلمة أو المرسلة
-      socket.on('private_message', function(data) {
-          var item = document.createElement('li');
-          var senderID = data.sender;
-          var messageText = data.message;
-          
-          if (senderID === myID) {
-              // رسالة مرسلة من قبلك
-              item.innerHTML = '<strong>' + 'أنت' + ' (إلى ID ينتهي بـ ' + recipientInput.value.slice(-4) + ')' + ': </strong>' + messageText;
-          } else {
-              // رسالة مستلمة
-              item.innerHTML = '<strong>' + 'من ID ينتهي بـ ' + senderID.slice(-4) + ': </strong>' + messageText;
-          }
-
-          messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight);
-      });
+        // استقبال الرسائل وعرض الاسم
+        socket.on('chat message', function(data) {
+            var item = document.createElement('li');
+            var isPrivate = data.msg.includes('(خاص أو في غرفة');
+            
+            // تمييز رسائل السيرفر أو الرسائل الخاصة بلون مختلف
+            if (data.user === 'SERVER') {
+                item.style.color = 'green';
+            } else if (isPrivate) {
+                item.style.color = 'red';
+            }
+            
+            item.innerHTML = '<strong>' + data.user + ': </strong>' + data.msg; 
+            messages.appendChild(item);
+            window.scrollTo(0, document.body.scrollHeight);
+        });
     </script>
+</body>
 </html>
