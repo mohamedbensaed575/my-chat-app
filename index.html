@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>تطبيق دردشة يا محمد</title>
+    <style>
+        body { margin: 0; padding-bottom: 3rem; font-family: sans-serif; background: #f4f4f4; }
+        h1 { background: #333; color: white; margin: 0; padding: 10px; font-size: 1.5em; }
+        #messages { list-style-type: none; margin: 0; padding: 0; }
+        #messages li { padding: 0.5rem 1rem; border-bottom: 1px solid #eee; }
+        #messages li:nth-child(odd) { background: #fff; }
+        #messages li strong { color: #007bff; } /* لون أزرق للمرسل/المستقبل */
+        
+        form {
+            background: #fff;
+            padding: 0.25rem;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            height: 3rem;
+            box-sizing: border-box;
+            border-top: 1px solid #ccc;
+        }
+        form input {
+            border: 1px solid #ccc;
+            padding: 0 1rem;
+            flex-grow: 1;
+            border-radius: 4px;
+            margin: 0.25rem;
+        }
+        form button {
+            background: #28a745; /* لون أخضر جميل */
+            border: none;
+            padding: 0 1rem;
+            margin: 0.25rem;
+            border-radius: 4px;
+            outline: none;
+            color: white;
+            cursor: pointer;
+        }
+        #recipient_id {
+            flex-grow: 0;
+            width: 120px;
+            background: #e9ecef; /* لون مميز لحقل الـ ID */
+        }
+    </style>
+</head>
+<body>
+    <h1>تطبيق الدردشة | ID الخاص بك: جاري التحميل...</h1>
+    
+    <ul id="messages"></ul>
+
+    <form action="">
+        <input id="recipient_id" autocomplete="off" placeholder="ID المستلم" required /> 
+        <input id="m" autocomplete="off" placeholder="اكتب رسالتك..." required />
+        <button>إرسال</button>
+    </form>
+
+    <script src="/socket.io/socket.io.js"></script>
+    
+    <script>
+      var socket = io();
+      var form = document.querySelector('form');
+      var input = document.getElementById('m');
+      var recipientInput = document.getElementById('recipient_id');
+      var messages = document.getElementById('messages');
+      var myID = ''; // سنحفظ فيه الـ ID الخاص بنا
+
+      // 1. استقبال الـ ID الخاص بنا وعرضه
+      socket.on('my_id', function(id) {
+          myID = id;
+          document.querySelector('h1').innerHTML = 'تطبيق الدردشة | ID الخاص بك: <strong>' + myID + '</strong>';
+      });
+      
+      // 2. معالجة إرسال الرسالة الخاصة
+      form.addEventListener('submit', function(e) {
+          e.preventDefault();
+          var recipient = recipientInput.value.trim();
+          var msg = input.value.trim();
+
+          if (msg && recipient) {
+              // نرسل الرسالة و ID المستلم
+              socket.emit('private_message', { recipient: recipient, message: msg });
+              
+              // مسح حقل الرسالة
+              input.value = '';
+          } else if (msg && !recipient) {
+              alert('يجب إدخال ID المستلم أولاً!');
+          }
+      });
+
+      // 3. عرض الرسائل المستلمة أو المرسلة
+      socket.on('private_message', function(data) {
+          var item = document.createElement('li');
+          var senderID = data.sender;
+          var messageText = data.message;
+          
+          if (senderID === myID) {
+              // رسالة مرسلة من قبلك
+              item.innerHTML = '<strong>' + 'أنت' + ' (إلى ID ينتهي بـ ' + recipientInput.value.slice(-4) + ')' + ': </strong>' + messageText;
+          } else {
+              // رسالة مستلمة
+              item.innerHTML = '<strong>' + 'من ID ينتهي بـ ' + senderID.slice(-4) + ': </strong>' + messageText;
+          }
+
+          messages.appendChild(item);
+          window.scrollTo(0, document.body.scrollHeight);
+      });
+    </script>
+</html>
