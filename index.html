@@ -20,22 +20,8 @@
         #messages li:nth-child(odd) { background: #eee; }
         #messages li strong { font-weight: bold; color: #007bff; }
         
-        /* ستايل شريط الألوان الجديد والمميز */
-        #color-tracker {
-            position: fixed;
-            top: 50%; 
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 300px;
-            height: 20px;
-            /* تدرج الألوان حسب طلبك */
-            background: linear-gradient(to right, red, orange, yellow, green, blue, indigo, violet);
-            border-radius: 10px;
-            pointer-events: none; /* لا يعيق النقر على أي شيء */
-            transition: transform 0.05s linear; /* يجعل الحركة ناعمة */
-            opacity: 0.8;
-            z-index: 100;
-        }
+        /* مهم: جعل خلفية الصفحة شفافة لرؤية تأثير الـ Canvas */
+        body { background-color: transparent; }
     </style>
 </head>
 <body>
@@ -58,7 +44,9 @@
         </form>
     </div>
 
-    <div id="color-tracker"></div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.2/p5.min.js"></script>
+    
+    <script src="mouse-trail.js"></script> 
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -73,9 +61,6 @@
         var roomInput = document.getElementById('room');
         var messages = document.getElementById('messages');
         
-        // المتغير الجديد لتتبع الحركة
-        var tracker = document.getElementById('color-tracker'); 
-
         // التعامل مع إرسال الاسم
         nameForm.addEventListener('submit', function(e) {
             e.preventDefault();
@@ -115,36 +100,6 @@
             item.innerHTML = '<strong>' + data.user + ': </strong>' + data.msg; 
             messages.appendChild(item);
             window.scrollTo(0, document.body.scrollHeight);
-        });
-        
-        // **دالة تحديث موقع شريط الألوان**
-        function updateTrackerPosition(clientX, clientY) {
-            // تحديد مركز الشاشة
-            var centerX = window.innerWidth / 2;
-            var centerY = window.innerHeight / 2;
-            
-            // حساسية الحركة (يمكنك تغييرها للتحكم في سرعة الإزاحة)
-            var sensitivity = 0.5; 
-            
-            // حساب فرق الإزاحة عن المركز
-            var deltaX = (clientX - centerX) * sensitivity;
-            var deltaY = (clientY - centerY) * sensitivity;
-
-            // تطبيق الحركة باستخدام خاصية transform
-            tracker.style.transform = `translate(calc(-50% + ${deltaX}px), calc(40% + ${deltaY}px))`;
-        }
-
-        // 1. تتبع حركة الماوس
-        document.addEventListener('mousemove', function(e) {
-            updateTrackerPosition(e.clientX, e.clientY);
-        });
-
-        // 2. تتبع حركة اللمس (للأجهزة التي تعمل باللمس)
-        document.addEventListener('touchmove', function(e) {
-            if (e.touches.length > 0) {
-                e.preventDefault(); 
-                updateTrackerPosition(e.touches[0].clientX, e.touches[0].clientY);
-            }
         });
         
     </script>
