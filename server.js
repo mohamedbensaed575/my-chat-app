@@ -1,73 +1,66 @@
-// 1. تعريف المكتبات
-const app = require('express')();
-const http = require('http');
-const server = http.createServer(app);
-const io = require("socket.io")(server);
+// 1. استيراد الحزم الضرورية
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
+const path = require('path'); // إضافة مكتبة المسارات
 
-// 2. تحديد المنفذ (Port)
-// يستخدم Render متغيرات البيئة، لكن نستخدم 3000 للتجربة المحلية
-const PORT = process.env.PORT || 3000;
+// تحميل المتغيرات السرية من ملف .env
+require('dotenv').config();
 
-// هذا لكي يقوم الخادم بتخزين الاسم المؤقت لكل مستخدم (ID: Name)
-var users = {}; 
+// تهيئة Gemini باستخدام المفتاح السري المجاني
+const { GoogleGenAI } = require('@google/genai');
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }); 
 
-// 3. تحديد المسار الأساسي (إرسال صفحة الواجهة)
-app.get('/', (req, res) => {
-    // هذا السطر يحل المشكلة ويعرض ملف index.html
-    res.sendFile(__dirname + '/index.html'); 
+const app = express();
+// عند النشر على Render، يجب أن نستخدم البورت الذي يحدده Render (process.env.PORT)
+// أو نستخدم البورت الافتراضي 3000 إذا كنا نعمل محلياً (localhost)
+const port = process.env.PORT || 3000;
+
+// 2. تفعيل الميزات
+app.use(bodyParser.json());
+app.use(cors()); 
+
+// **الخطوة الحاسمة:** تعريف المسار لملفات الواجهة الثابتة (index.html, style.css, script.js)
+// هذا يضمن أن Render يمكنه العثور على ملفات الواجهة وخدمتها
+app.use(express.static(path.join(__dirname))); 
+
+// 3. مسار API الجديد: /api/ask
+app.post('/api/ask', async (req, res) => {
+    // 🛑 فحص المفتاح السري (يجب إضافته في إعدادات Render كمتغير بيئة)
+    if (!process.env.GEMINI_API_KEY) {
+        // هذا الرد سيظهر إذا لم يتم إضافة المفتاح في إعدادات Render
+        return res.status(500).json({ error: 'لم يتم العثور على المفتاح السري (GEMINI_API_KEY). تأكد من إضافته كـ Environment Variable في Render.' });
+    }
+
+    try {
+        const { question } = req.body;
+
+        // **تعريف الشخصية الليبية (System Instruction)**
+        const systemInstruction = 
+            `أنت نموذج ذكاء اصطناعي. مهمتك هي الإجابة على جميع أسئلة المستخدم بلهجة ليبية طرابلسية خالصة. 
+            استخدم عبارات شعبية مثل "يا وليدي"، "حيّك"، "شن جوّك"، "كويس"، "بكل"، "كُني"، "هكي"، "أمانة"، "خلاص"، "والله صحيت"، إلخ. 
+            تأكد أن ردك ودود ومناسب للثقافة الليبية.`;
+        
+        // إرسال الطلب إلى نموذج Gemini
+        const response = await ai.models.generateContent({
+            model: "gemini-2.5-flash", 
+            contents: [
+                {
+                    role: "user",
+                    parts: [{ text: `${systemInstruction}\n\nسؤال المستخدم: ${question}` }]
+                }
+            ]
+        });
+
+        const aiResponse = response.text;
+        res.json({ response: aiResponse });
+
+    } catch (error) {
+        console.error('Error fetching AI response:', error.message);
+        res.status(500).json({ error: `صار خطأ يا وليدي في الاتصال بالذكاء الاصطناعي. ${error.message}` });
+    }
 });
 
-// 4. استماع الخادم للاتصالات
-io.on('connection', (socket) => {
-    console.log(`مستخدم جديد متصل بالـ ID: ${socket.id}`);
-
-    // استقبال اسم المستخدم لأول مرة
-    socket.on('new user', function(data) {
-        users[socket.id] = data; // تخزين الاسم بناءً على ID الاتصال
-        console.log('تم تسجيل اسم المستخدم: ' + data);
-        
-        // **ميزة الغرف والخاص:** الانضمام إلى غرفة باسم المستخدم لتمكين الرسائل الخاصة
-        socket.join(data); 
-        
-        // إشعار المستخدمين الجدد (رسالة عامة)
-        io.emit('chat message', { msg: `${data} انضم للدردشة!`, user: 'SERVER' });
-    });
-
-    // استقبال رسائل الدردشة مع الاسم والغرفة/المرسل إليه
-    socket.on('chat message', (data) => {
-        
-        // 1. إذا كانت الرسالة موجهة لغرفة أو مستخدم محدد (Private/Room)
-        if (data.room && data.room !== '') {
-            // إرسال الرسالة للغرفة/المستخدم فقط باستخدام io.to()
-            io.to(data.room).emit('chat message', { 
-                msg: data.msg + ` (خاص أو في غرفة ${data.room})`, 
-                user: data.user
-            });
-            console.log(`رسالة من ${data.user} إلى الغرفة/الخاص: ${data.room}`);
-        } 
-        
-        // 2. إذا كانت رسالة عامة (Public)
-        else {
-            // إرسال الرسالة للجميع (Public)
-            io.emit('chat message', { msg: data.msg, user: data.user }); 
-            console.log(`رسالة عامة من ${data.user}: ${data.msg}`);
-        }
-    });
-
-    // عند فصل الاتصال
-    socket.on('disconnect', () => {
-        // رسالة تنبيه للمستخدمين بأن فلاناً غادر
-        if (users[socket.id]) {
-            const disconnectedUser = users[socket.id];
-            io.emit('chat message', { msg: `${disconnectedUser} غادر الدردشة!`, user: 'SERVER' });
-            delete users[socket.id]; 
-            console.log(`المستخدم ${disconnectedUser} قطع الاتصال`);
-        }
-    });
-});
-
-
-// 5. استماع الخادم للاتصالات
-server.listen(PORT, () => {
-    console.log(`الخادم جاهز! يستمع على منفذ ${PORT}`);
+app.listen(port, () => {
+    console.log(`✅ LibyanGPT Server running on port ${port}`);
 });
